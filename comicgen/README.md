@@ -8,7 +8,7 @@ Create high-quality comics from user stories using Gemini for story planning and
 
 ```
 GEMINI_API_KEY=your_key
-TEXT_MODEL=gemini-2.0-flash-exp
+TEXT_MODEL=gemini-1.5-flash
 IMAGE_MODEL=gemini-2.0-flash-preview-image-generation
 MAX_OUTPUT_TOKENS=8192
 ```

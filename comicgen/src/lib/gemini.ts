@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const envApiKey = process.env.GEMINI_API_KEY as string | undefined;
 
-export const TEXT_MODEL_ID = process.env.TEXT_MODEL || "gemini-2.0-flash-exp";
+export const TEXT_MODEL_ID = process.env.TEXT_MODEL || "gemini-1.5-flash";
 export const IMAGE_MODEL_ID = process.env.IMAGE_MODEL || "gemini-2.0-flash-preview-image-generation";
 
 let envGenAIInstance: GoogleGenerativeAI | null = null;
