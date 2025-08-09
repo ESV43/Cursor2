@@ -73,6 +73,8 @@ export default function Home() {
     setCharacterRefs((prev) => prev.filter((_, i) => i !== index));
   }
 
+  const generateDisabled = loading || !story.trim();
+
   return (
     <div className="min-h-screen p-6 sm:p-10 max-w-6xl mx-auto font-sans">
       <h1 className="text-3xl font-bold mb-4">AI Comic Generator</h1>
@@ -168,7 +170,7 @@ export default function Home() {
         <button
           className="px-5 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
           onClick={onGenerate}
-          disabled={loading || !story.trim()}
+          disabled={generateDisabled}
         >
           {loading ? "Generating..." : "Generate Comic"}
         </button>

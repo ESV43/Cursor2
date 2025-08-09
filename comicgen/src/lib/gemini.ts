@@ -1,17 +1,23 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const apiKey = process.env.GEMINI_API_KEY as string;
-if (!apiKey) {
-  throw new Error("GEMINI_API_KEY is not set");
-}
+const apiKey = process.env.GEMINI_API_KEY as string | undefined;
 
 export const TEXT_MODEL_ID = process.env.TEXT_MODEL || "gemini-2.0-flash-exp";
 export const IMAGE_MODEL_ID = process.env.IMAGE_MODEL || "gemini-2.0-flash-preview-image-generation";
 
-export const genAI = new GoogleGenerativeAI({ apiKey });
+let genAIInstance: GoogleGenerativeAI | null = null;
+function getGenAI(): GoogleGenerativeAI {
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not set in environment");
+  }
+  if (!genAIInstance) {
+    genAIInstance = new GoogleGenerativeAI({ apiKey });
+  }
+  return genAIInstance;
+}
 
 export async function generateText(options: { system?: string; input: string; jsonSchema?: any; temperature?: number }) {
-  const model = genAI.getGenerativeModel({ model: TEXT_MODEL_ID, systemInstruction: options.system });
+  const model = getGenAI().getGenerativeModel({ model: TEXT_MODEL_ID, systemInstruction: options.system });
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: options.input }]}],
     generationConfig: {
@@ -33,8 +39,7 @@ export async function generateImage(options: {
   stylePreset?: string;
   seed?: number;
 }) {
-  // The Node SDK currently uses generateContent for image creation on image-capable models.
-  const model = genAI.getGenerativeModel({ model: IMAGE_MODEL_ID });
+  const model = getGenAI().getGenerativeModel({ model: IMAGE_MODEL_ID });
   const parts: any[] = [];
   if (options.references?.length) {
     for (const ref of options.references) {
@@ -47,13 +52,10 @@ export async function generateImage(options: {
     contents: [{ role: "user", parts }],
     generationConfig: {
       temperature: 0.6,
-      // Some image models accept size hints embedded in prompt or via config; keeping prompt-based control for now.
-      // Add seed for consistency across panels if provided.
       seed: options.seed,
     } as any,
   });
 
-  // The response may contain images in the candidates' parts as inlineData (base64)
   const images: { mimeType: string; data: string }[] = [];
   for (const cand of result.response.candidates ?? []) {
     for (const part of cand.content.parts ?? []) {
