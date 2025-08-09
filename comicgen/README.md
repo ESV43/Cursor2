@@ -4,7 +4,7 @@ Create high-quality comics from user stories using Gemini for story planning and
 
 ## Setup
 
-1. Copy `.env.example` to `.env.local` and set values:
+1. Copy `.env.example` to `.env.local` and set values (optional if you plan to enter API key in the UI):
 
 ```
 GEMINI_API_KEY=your_key
@@ -26,6 +26,11 @@ pnpm dev
 ```
 
 Open http://localhost:3000
+
+## Using your API key
+
+- You can enter your Gemini API key in the UI (stored locally in your browser) or set it as `GEMINI_API_KEY` on the server.
+- If both are present, the UI-provided key is used for your requests.
 
 ## Features
 

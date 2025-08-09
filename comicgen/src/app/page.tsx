@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type CharacterRef = { name: string; file?: File; preview?: string; base64?: string; mimeType?: string };
 
 export default function Home() {
+  const [apiKey, setApiKey] = useState("");
   const [story, setStory] = useState("");
   const [numPages, setNumPages] = useState(4);
   const [style, setStyle] = useState("photorealism");
@@ -14,6 +15,17 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("gemini_api_key") || "";
+    if (stored) setApiKey(stored);
+  }, []);
+
+  function persistApiKey(val: string) {
+    setApiKey(val);
+    if (val) localStorage.setItem("gemini_api_key", val);
+    else localStorage.removeItem("gemini_api_key");
+  }
 
   async function fileToBase64(file: File) {
     const arrayBuffer = await file.arrayBuffer();
@@ -40,6 +52,7 @@ export default function Home() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          apiKey: apiKey || undefined,
           story,
           numPages: Number(numPages),
           style,
@@ -73,7 +86,7 @@ export default function Home() {
     setCharacterRefs((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const generateDisabled = loading || !story.trim();
+  const generateDisabled = loading || !story.trim() || !(apiKey || process.env.NEXT_PUBLIC_FAKE);
 
   return (
     <div className="min-h-screen p-6 sm:p-10 max-w-6xl mx-auto font-sans">
@@ -82,6 +95,17 @@ export default function Home() {
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Gemini API Key</label>
+            <input
+              type="password"
+              className="w-full border rounded p-2"
+              value={apiKey}
+              onChange={(e) => persistApiKey(e.target.value)}
+              placeholder="Enter your Gemini API key"
+            />
+            <p className="text-xs text-gray-500 mt-1">Stored locally in your browser. Used only for your requests.</p>
+          </div>
           <div>
             <label className="block text-sm font-medium mb-1">Story</label>
             <textarea

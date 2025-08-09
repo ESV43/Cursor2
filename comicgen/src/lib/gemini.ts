@@ -1,23 +1,33 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const apiKey = process.env.GEMINI_API_KEY as string | undefined;
+const envApiKey = process.env.GEMINI_API_KEY as string | undefined;
 
 export const TEXT_MODEL_ID = process.env.TEXT_MODEL || "gemini-2.0-flash-exp";
 export const IMAGE_MODEL_ID = process.env.IMAGE_MODEL || "gemini-2.0-flash-preview-image-generation";
 
-let genAIInstance: GoogleGenerativeAI | null = null;
-function getGenAI(): GoogleGenerativeAI {
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not set in environment");
+let envGenAIInstance: GoogleGenerativeAI | null = null;
+const apiKeyToClient = new Map<string, GoogleGenerativeAI>();
+
+function getGenAI(overrideApiKey?: string): GoogleGenerativeAI {
+  const key = overrideApiKey || envApiKey;
+  if (!key) {
+    throw new Error("GEMINI_API_KEY is not set in environment and no override was provided");
   }
-  if (!genAIInstance) {
-    genAIInstance = new GoogleGenerativeAI({ apiKey });
+  if (overrideApiKey) {
+    const cached = apiKeyToClient.get(overrideApiKey);
+    if (cached) return cached;
+    const client = new GoogleGenerativeAI({ apiKey: overrideApiKey });
+    apiKeyToClient.set(overrideApiKey, client);
+    return client;
   }
-  return genAIInstance;
+  if (!envGenAIInstance) {
+    envGenAIInstance = new GoogleGenerativeAI({ apiKey: key });
+  }
+  return envGenAIInstance;
 }
 
-export async function generateText(options: { system?: string; input: string; jsonSchema?: any; temperature?: number }) {
-  const model = getGenAI().getGenerativeModel({ model: TEXT_MODEL_ID, systemInstruction: options.system });
+export async function generateText(options: { system?: string; input: string; jsonSchema?: any; temperature?: number; apiKeyOverride?: string }) {
+  const model = getGenAI(options.apiKeyOverride).getGenerativeModel({ model: TEXT_MODEL_ID, systemInstruction: options.system });
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: options.input }]}],
     generationConfig: {
@@ -38,8 +48,9 @@ export async function generateImage(options: {
   size?: { width: number; height: number };
   stylePreset?: string;
   seed?: number;
+  apiKeyOverride?: string;
 }) {
-  const model = getGenAI().getGenerativeModel({ model: IMAGE_MODEL_ID });
+  const model = getGenAI(options.apiKeyOverride).getGenerativeModel({ model: IMAGE_MODEL_ID });
   const parts: any[] = [];
   if (options.references?.length) {
     for (const ref of options.references) {

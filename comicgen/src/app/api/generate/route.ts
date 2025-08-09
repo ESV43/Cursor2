@@ -31,12 +31,13 @@ const PayloadSchema = z.object({
     )
     .optional(),
   seed: z.number().int().optional(),
+  apiKey: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
   try {
     const json = await req.json();
-    const { story, numPages, style, includeInImageText, includeBelowText, characterRefs, seed } =
+    const { story, numPages, style, includeInImageText, includeBelowText, characterRefs, seed, apiKey } =
       PayloadSchema.parse(json);
 
     const panelPlanSchema = {
@@ -99,6 +100,7 @@ Additional character guidance:\n${characterHints}`;
       input: planningPrompt,
       jsonSchema: panelPlanSchema as any,
       temperature: 0.5,
+      apiKeyOverride: apiKey,
     });
 
     const planText = planResponse.text();
@@ -131,6 +133,7 @@ Additional character guidance:\n${characterHints}`;
         prompt,
         references: referenceParts,
         seed,
+        apiKeyOverride: apiKey,
       });
       images.push(imgs);
     }
