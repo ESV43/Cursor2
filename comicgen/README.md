@@ -32,6 +32,17 @@ Open http://localhost:3000
 - You can enter your Gemini API key in the UI (stored locally in your browser) or set it as `GEMINI_API_KEY` on the server.
 - If both are present, the UI-provided key is used for your requests.
 
+## Deploying to Vercel
+
+- Set the following environment variables in your Vercel project (Project Settings → Environment Variables):
+  - `GEMINI_API_KEY` (optional if users will enter in the UI)
+  - `TEXT_MODEL` (default `gemini-2.5-flash-lite`)
+  - `IMAGE_MODEL` (default `gemini-2.0-flash-preview-image-generation`)
+  - `MAX_OUTPUT_TOKENS` (optional)
+- This repo includes `vercel.json` to run API routes on Node.js 20 with a longer timeout.
+- Ensure the Build Command is `pnpm build` (or `next build`) and Output Directory is `.next` (default for Next.js).
+- On first deploy, add your env vars to Vercel, then redeploy.
+
 ## Features
 
 - Story analysis into panel prompts, captions, dialogues
@@ -39,6 +50,7 @@ Open http://localhost:3000
 - Toggle in-image text vs. text below panels
 - Character reference uploads for consistency (multimodal prompting)
 - Fixed seed option for consistency across runs
+- Multimodal chat mode: single-pass interleaved text + image outputs
 - Returns base64 images; ready to export or print
 
 ## Notes
