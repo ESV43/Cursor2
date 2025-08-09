@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 
 type CharacterRef = { name: string; file?: File; preview?: string; base64?: string; mimeType?: string };
 
+type OutputItem = { type: "text" | "image"; text?: string; image?: { mimeType: string; data: string } };
+
 export default function Home() {
   const [apiKey, setApiKey] = useState("");
   const [story, setStory] = useState("");
@@ -12,9 +14,11 @@ export default function Home() {
   const [includeBelowText, setIncludeBelowText] = useState(true);
   const [seed, setSeed] = useState<number | "">("");
   const [characterRefs, setCharacterRefs] = useState<CharacterRef[]>([]);
+  const [mode, setMode] = useState<"plan+render" | "multimodal-chat">("plan+render");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
+  const [chatOutputs, setChatOutputs] = useState<OutputItem[] | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("gemini_api_key") || "";
@@ -39,6 +43,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setChatOutputs(null);
     try {
       const refsPayload = await Promise.all(
         characterRefs.map(async (c) => ({
@@ -52,6 +57,7 @@ export default function Home() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          mode,
           apiKey: apiKey || undefined,
           story,
           numPages: Number(numPages),
@@ -64,7 +70,8 @@ export default function Home() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed");
-      setResult(json);
+      if (mode === "multimodal-chat") setChatOutputs(json.outputs as OutputItem[]);
+      else setResult(json);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -105,6 +112,13 @@ export default function Home() {
               placeholder="Enter your Gemini API key"
             />
             <p className="text-xs text-gray-500 mt-1">Stored locally in your browser. Used only for your requests.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Mode</label>
+            <select className="w-full border rounded p-2" value={mode} onChange={(e) => setMode(e.target.value as any)}>
+              <option value="plan+render">Plan + Render (two-step)</option>
+              <option value="multimodal-chat">Multimodal Chat (text + image stream)</option>
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Story</label>
@@ -201,7 +215,7 @@ export default function Home() {
         {error && <span className="text-red-600 text-sm">{error}</span>}
       </div>
 
-      {result && (
+      {mode === "plan+render" && result && (
         <div className="mt-10 space-y-6">
           {result.panels.map((p: any) => (
             <div key={p.index} className="border rounded p-4">
@@ -227,6 +241,21 @@ export default function Home() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {mode === "multimodal-chat" && chatOutputs && (
+        <div className="mt-10 space-y-6">
+          <div className="border rounded p-4 space-y-4">
+            {chatOutputs.map((o, i) => (
+              <div key={i}>
+                {o.type === "text" && <p className="text-sm leading-6 whitespace-pre-wrap">{o.text}</p>}
+                {o.type === "image" && o.image && (
+                  <img src={`data:${o.image.mimeType};base64,${o.image.data}`} alt={`out-${i}`} className="w-full rounded border" />
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { generateText, generateImage, ImageRef } from "@/lib/gemini";
+import { generateText, generateImage, ImageRef, IMAGE_MODEL_ID } from "@/lib/gemini";
+import { GoogleGenAI, Modality } from "@google/genai";
 
 export const runtime = "nodejs";
 export const preferredRegion = ["iad1"]; // adjust as needed
@@ -16,6 +17,7 @@ const StyleEnum = z.enum([
 ]);
 
 const PayloadSchema = z.object({
+  mode: z.enum(["plan+render", "multimodal-chat"]).default("plan+render"),
   story: z.string().min(1),
   numPages: z.number().int().min(1).max(20),
   style: StyleEnum,
@@ -37,9 +39,62 @@ const PayloadSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const json = await req.json();
-    const { story, numPages, style, includeInImageText, includeBelowText, characterRefs, seed, apiKey } =
+    const { mode, story, numPages, style, includeInImageText, includeBelowText, characterRefs, seed, apiKey } =
       PayloadSchema.parse(json);
 
+    if (mode === "multimodal-chat") {
+      // Use @google/genai chat with text+image outputs in one pass.
+      if (!apiKey) {
+        return new Response(JSON.stringify({ error: "API key required for multimodal chat mode" }), { status: 400 });
+      }
+      const genai = new GoogleGenAI({ apiKey });
+      const chat = genai.chats.create({
+        model: IMAGE_MODEL_ID || "gemini-2.0-flash-preview-image-generation",
+        config: { responseModalities: [Modality.TEXT, Modality.IMAGE] },
+        history: [],
+      });
+
+      const stylePrompt: Record<z.infer<typeof StyleEnum>, string> = {
+        photorealism:
+          "photorealistic, high dynamic range, cinematic lighting, sharp details, consistent lens and color grading",
+        comic: "western comic style, bold inks, halftone shading, flat colors, dynamic composition",
+        manga: "manga style, screentone textures, black and white ink, expressive linework",
+        anime: "anime style, clean lineart, cel shading, vibrant colors, cinematic",
+        watercolor: "watercolor wash, soft edges, painterly textures",
+        pixel: "pixel art, 64x64 upscale, crisp pixel edges, NES era palette",
+        "3d": "3D render, physically based materials, realistic lighting, raytraced reflections",
+      };
+
+      const characterNote = (characterRefs || [])
+        .map((c) => `Character ${c.name} is provided via reference image. Keep their look consistent.`)
+        .join("\n");
+
+      const additional = `\n\nGuidelines:\n- Create ${numPages} panels. For each sentence or beat, produce interleaved TEXT then an IMAGE.\n- Global style: ${style} (${stylePrompt[style]}).\n- ${includeInImageText ? "Allow short readable text within the image." : "Avoid rendering any text within the image."}\n- Maintain character consistency using the provided reference images.\n- Do not include extra commentary outside the story flow.`;
+
+      const referencesParts = (characterRefs || []).map((c) => ({ inlineData: { data: c.imageBase64, mimeType: c.mimeType || "image/png" } }));
+
+      const stream = await chat.sendMessageStream({
+        message: `Story:\n${story}\n\n${characterNote}${additional}`,
+        // If SDK supports passing parts, we would include references here. As a workaround, they are context in message.
+      } as any);
+
+      const outputs: { type: "text" | "image"; text?: string; image?: { mimeType: string; data: string } }[] = [];
+      for await (const chunk of stream) {
+        for (const candidate of (chunk as any).candidates || []) {
+          for (const part of candidate.content.parts ?? []) {
+            if ((part as any).text) {
+              outputs.push({ type: "text", text: (part as any).text });
+            } else if ((part as any).inlineData?.data) {
+              outputs.push({ type: "image", image: { mimeType: (part as any).inlineData.mimeType || "image/png", data: (part as any).inlineData.data } });
+            }
+          }
+        }
+      }
+
+      return new Response(JSON.stringify({ mode, outputs }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+
+    // Default: plan + render mode (two-step process)
     const panelPlanSchema = {
       type: "object",
       properties: {

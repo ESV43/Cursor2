@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@google/genai": "^1.13.0",
     "@google/generative-ai": "^0.24.1",
     "multer": "^2.0.2",
     "next": "15.4.6",
