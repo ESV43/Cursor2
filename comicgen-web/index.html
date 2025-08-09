@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gemini Comic Generator</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="container row between center">
+        <h1>Gemini Comic Generator</h1>
+        <div class="row gap-sm">
+          <label class="key-label" for="apiKey">Gemini API key</label>
+          <input id="apiKey" type="password" placeholder="AI Studio API key" />
+          <button id="saveKeyBtn" class="btn secondary">Save</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h2>Story</h2>
+        <textarea id="story" rows="8" placeholder="Paste or write your story here..."></textarea>
+        <div class="row gap">
+          <div class="field">
+            <label for="numPages">Number of pages/panels</label>
+            <input id="numPages" type="number" min="1" max="30" value="6" />
+          </div>
+          <div class="field">
+            <label for="language">Language</label>
+            <input id="language" type="text" value="English" />
+          </div>
+          <div class="field">
+            <label for="aspect">Aspect ratio</label>
+            <select id="aspect">
+              <option value="1024x1536">Vertical (1024x1536)</option>
+              <option value="1536x1024">Horizontal (1536x1024)</option>
+              <option value="1024x1024">Square (1024x1024)</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Style & Text Options</h2>
+        <div class="row gap">
+          <div class="field">
+            <label for="stylePreset">Style preset</label>
+            <select id="stylePreset">
+              <option value="photorealistic">Photorealism</option>
+              <option value="anime">Anime</option>
+              <option value="manga">Manga</option>
+              <option value="western_comic">Western comic</option>
+              <option value="pixel_art">Pixel art</option>
+              <option value="watercolor">Watercolor</option>
+              <option value="oil_painting">Oil painting</option>
+              <option value="noir">Noir / B&W</option>
+            </select>
+          </div>
+          <div class="field grow">
+            <label for="styleNotes">Additional style notes</label>
+            <input id="styleNotes" type="text" placeholder="e.g., soft lighting, cinematic, shallow depth of field" />
+          </div>
+        </div>
+        <div class="row gap">
+          <div class="field">
+            <label for="includeBalloons">Speech bubbles in images</label>
+            <select id="includeBalloons">
+              <option value="yes">Yes (draw speech balloons)</option>
+              <option value="no" selected>No (no text in image)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="captionsBelow">Captions/dialogues below image</label>
+            <select id="captionsBelow">
+              <option value="yes" selected>Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="globalSeed">Global seed (optional)</label>
+            <input id="globalSeed" type="number" min="0" placeholder="e.g., 12345" />
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Character references</h2>
+        <p class="muted">Upload one or more reference images for each named character to improve consistency. Use the same character name across panels.</p>
+        <div id="charList" class="char-list"></div>
+        <div class="row gap">
+          <input id="newCharName" type="text" placeholder="Character name (e.g., Alex)" />
+          <input id="newCharFiles" type="file" accept="image/*" multiple />
+          <button id="addCharBtn" class="btn">Add/Update Character</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Models</h2>
+        <div class="row gap">
+          <div class="field grow">
+            <label for="textModel">Text model for analysis</label>
+            <input id="textModel" type="text" value="gemini-2.0-flash" />
+          </div>
+          <div class="field grow">
+            <label for="imageModel">Image model</label>
+            <input id="imageModel" type="text" value="gemini-2.0-flash-preview-image-generation" />
+          </div>
+          <div class="field">
+            <label for="maxParallel">Parallel images</label>
+            <input id="maxParallel" type="number" min="1" max="6" value="2" />
+          </div>
+        </div>
+      </section>
+
+      <section class="card actions">
+        <div class="row between center">
+          <div class="row gap-sm">
+            <button id="analyzeBtn" class="btn secondary">1) Analyze Story</button>
+            <button id="generateBtn" class="btn primary">2) Generate Comic</button>
+          </div>
+          <div class="row gap-sm">
+            <button id="exportZipBtn" class="btn">Export ZIP</button>
+          </div>
+        </div>
+        <div id="status" class="status"></div>
+      </section>
+
+      <section class="card">
+        <h2>Panels</h2>
+        <div id="panels" class="panels"></div>
+      </section>
+    </main>
+
+    <footer class="container muted small">
+      <p>All generations run client-side with your API key. Keep it private. Use responsibly and within model terms.</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
