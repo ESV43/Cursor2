@@ -16,7 +16,9 @@ type Panel = {
 
 type PlanRenderResult = { panels: Panel[] };
 
-type ApiResponse = PlanRenderResult | { mode: "multimodal-chat"; outputs: OutputItem[] } | { error: string };
+type ChatResponse = { mode: "multimodal-chat"; outputs: OutputItem[] };
+
+type ErrorResponse = { error: string };
 
 export default function Home() {
   const [apiKey, setApiKey] = useState("");
@@ -81,13 +83,20 @@ export default function Home() {
           seed: seed === "" ? undefined : Number(seed),
         }),
       });
-      const json: ApiResponse = await res.json();
+      const json: unknown = await res.json();
       if (!res.ok) {
-        const errMsg = (json as any).error || "Failed";
+        const errMsg = typeof json === "object" && json !== null && "error" in json ? (json as ErrorResponse).error : "Failed";
         throw new Error(errMsg);
       }
-      if (mode === "multimodal-chat" && "outputs" in (json as any)) setChatOutputs((json as any).outputs as OutputItem[]);
-      else setResult(json as PlanRenderResult);
+      if (mode === "multimodal-chat") {
+        if (typeof json === "object" && json !== null && "outputs" in json) {
+          setChatOutputs((json as ChatResponse).outputs);
+        } else {
+          setError("Unexpected response for chat mode");
+        }
+      } else {
+        setResult(json as PlanRenderResult);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
