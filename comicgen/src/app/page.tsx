@@ -5,6 +5,19 @@ type CharacterRef = { name: string; file?: File; preview?: string; base64?: stri
 
 type OutputItem = { type: "text" | "image"; text?: string; image?: { mimeType: string; data: string } };
 
+type PanelImage = { mimeType: string; data: string };
+
+type Panel = {
+  index: number;
+  caption: string;
+  dialogues: { speaker: string; text: string }[];
+  images: PanelImage[];
+};
+
+type PlanRenderResult = { panels: Panel[] };
+
+type ApiResponse = PlanRenderResult | { mode: "multimodal-chat"; outputs: OutputItem[] } | { error: string };
+
 export default function Home() {
   const [apiKey, setApiKey] = useState("");
   const [story, setStory] = useState("");
@@ -17,7 +30,7 @@ export default function Home() {
   const [mode, setMode] = useState<"plan+render" | "multimodal-chat">("plan+render");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<PlanRenderResult | null>(null);
   const [chatOutputs, setChatOutputs] = useState<OutputItem[] | null>(null);
 
   useEffect(() => {
@@ -68,12 +81,16 @@ export default function Home() {
           seed: seed === "" ? undefined : Number(seed),
         }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed");
-      if (mode === "multimodal-chat") setChatOutputs(json.outputs as OutputItem[]);
-      else setResult(json);
-    } catch (e: any) {
-      setError(e.message);
+      const json: ApiResponse = await res.json();
+      if (!res.ok) {
+        const errMsg = (json as any).error || "Failed";
+        throw new Error(errMsg);
+      }
+      if (mode === "multimodal-chat" && "outputs" in (json as any)) setChatOutputs((json as any).outputs as OutputItem[]);
+      else setResult(json as PlanRenderResult);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -115,7 +132,7 @@ export default function Home() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Mode</label>
-            <select className="w-full border rounded p-2" value={mode} onChange={(e) => setMode(e.target.value as any)}>
+            <select className="w-full border rounded p-2" value={mode} onChange={(e) => setMode(e.target.value as "plan+render" | "multimodal-chat")}>
               <option value="plan+render">Plan + Render (two-step)</option>
               <option value="multimodal-chat">Multimodal Chat (text + image stream)</option>
             </select>
@@ -217,11 +234,11 @@ export default function Home() {
 
       {mode === "plan+render" && result && (
         <div className="mt-10 space-y-6">
-          {result.panels.map((p: any) => (
+          {result.panels.map((p) => (
             <div key={p.index} className="border rounded p-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-3">
-                  {(p.images || []).map((img: any, i: number) => (
+                  {(p.images || []).map((img, i) => (
                     <img key={i} src={`data:${img.mimeType};base64,${img.data}`} alt={`panel-${p.index}-${i}`} className="w-full rounded border" />
                   ))}
                 </div>
@@ -231,7 +248,7 @@ export default function Home() {
                     <div className="text-sm">
                       <h3 className="font-semibold mb-1">Dialogues</h3>
                       <ul className="list-disc list-inside space-y-1">
-                        {p.dialogues.map((d: any, j: number) => (
+                        {p.dialogues.map((d, j) => (
                           <li key={j}><span className="font-semibold">{d.speaker}:</span> {d.text}</li>
                         ))}
                       </ul>

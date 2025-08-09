@@ -26,7 +26,7 @@ function getGenAI(overrideApiKey?: string): GoogleGenerativeAI {
   return envGenAIInstance;
 }
 
-export async function generateText(options: { system?: string; input: string; jsonSchema?: any; temperature?: number; apiKeyOverride?: string }) {
+export async function generateText(options: { system?: string; input: string; jsonSchema?: Record<string, unknown>; temperature?: number; apiKeyOverride?: string }) {
   const model = getGenAI(options.apiKeyOverride).getGenerativeModel({ model: TEXT_MODEL_ID, systemInstruction: options.system });
   const result = await model.generateContent({
     contents: [{ role: "user", parts: [{ text: options.input }]}],
@@ -42,6 +42,13 @@ export async function generateText(options: { system?: string; input: string; js
 
 export type ImageRef = { inlineData?: { data: string; mimeType: string } } | { fileData: { fileUri: string; mimeType?: string } };
 
+type TextPart = { text: string };
+type InlineDataPart = { inlineData: { data: string; mimeType: string } };
+type FileDataPart = { fileData: { fileUri: string; mimeType?: string } };
+type ContentPart = TextPart | InlineDataPart | FileDataPart;
+
+type CandidatePart = { text?: string; inlineData?: { data?: string; mimeType?: string } };
+
 export async function generateImage(options: {
   prompt: string;
   references?: ImageRef[];
@@ -51,7 +58,7 @@ export async function generateImage(options: {
   apiKeyOverride?: string;
 }) {
   const model = getGenAI(options.apiKeyOverride).getGenerativeModel({ model: IMAGE_MODEL_ID });
-  const parts: any[] = [];
+  const parts: ContentPart[] = [];
   if (options.references?.length) {
     for (const ref of options.references) {
       parts.push(ref.inlineData ? { inlineData: ref.inlineData } : { fileData: ref.fileData });
@@ -64,15 +71,15 @@ export async function generateImage(options: {
     generationConfig: {
       temperature: 0.6,
       seed: options.seed,
-    } as any,
+    },
   });
 
   const images: { mimeType: string; data: string }[] = [];
   for (const cand of result.response.candidates ?? []) {
     for (const part of cand.content.parts ?? []) {
-      const inline = (part as any).inlineData;
-      if (inline?.data && inline?.mimeType) {
-        images.push({ mimeType: inline.mimeType, data: inline.data });
+      const p = part as CandidatePart;
+      if (p.inlineData?.data && p.inlineData?.mimeType) {
+        images.push({ mimeType: p.inlineData.mimeType, data: p.inlineData.data });
       }
     }
   }

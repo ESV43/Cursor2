@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { generateText, generateImage, ImageRef, IMAGE_MODEL_ID } from "@/lib/gemini";
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, type GenerateContentCandidate, type GenerateContentResult } from "@google/genai";
 
 export const runtime = "nodejs";
 export const preferredRegion = ["iad1"]; // adjust as needed
@@ -36,6 +36,10 @@ const PayloadSchema = z.object({
   apiKey: z.string().optional(),
 });
 
+type OutputItem = { type: "text" | "image"; text?: string; image?: { mimeType: string; data: string } };
+
+type CandidatePart = { text?: string; inlineData?: { data?: string; mimeType?: string } };
+
 export async function POST(req: NextRequest) {
   try {
     const json = await req.json();
@@ -43,7 +47,6 @@ export async function POST(req: NextRequest) {
       PayloadSchema.parse(json);
 
     if (mode === "multimodal-chat") {
-      // Use @google/genai chat with text+image outputs in one pass.
       if (!apiKey) {
         return new Response(JSON.stringify({ error: "API key required for multimodal chat mode" }), { status: 400 });
       }
@@ -71,21 +74,21 @@ export async function POST(req: NextRequest) {
 
       const additional = `\n\nGuidelines:\n- Create ${numPages} panels. For each sentence or beat, produce interleaved TEXT then an IMAGE.\n- Global style: ${style} (${stylePrompt[style]}).\n- ${includeInImageText ? "Allow short readable text within the image." : "Avoid rendering any text within the image."}\n- Maintain character consistency using the provided reference images.\n- Do not include extra commentary outside the story flow.`;
 
-      const referencesParts = (characterRefs || []).map((c) => ({ inlineData: { data: c.imageBase64, mimeType: c.mimeType || "image/png" } }));
-
       const stream = await chat.sendMessageStream({
         message: `Story:\n${story}\n\n${characterNote}${additional}`,
-        // If SDK supports passing parts, we would include references here. As a workaround, they are context in message.
-      } as any);
+      });
 
-      const outputs: { type: "text" | "image"; text?: string; image?: { mimeType: string; data: string } }[] = [];
+      const outputs: OutputItem[] = [];
       for await (const chunk of stream) {
-        for (const candidate of (chunk as any).candidates || []) {
-          for (const part of candidate.content.parts ?? []) {
-            if ((part as any).text) {
-              outputs.push({ type: "text", text: (part as any).text });
-            } else if ((part as any).inlineData?.data) {
-              outputs.push({ type: "image", image: { mimeType: (part as any).inlineData.mimeType || "image/png", data: (part as any).inlineData.data } });
+        const candidates = (chunk as unknown as GenerateContentResult).candidates ?? [];
+        for (const candidate of candidates) {
+          const parts = (candidate as GenerateContentCandidate).content.parts ?? [];
+          for (const part of parts) {
+            const p = part as CandidatePart;
+            if (p.text) {
+              outputs.push({ type: "text", text: p.text });
+            } else if (p.inlineData?.data) {
+              outputs.push({ type: "image", image: { mimeType: p.inlineData.mimeType || "image/png", data: p.inlineData.data } });
             }
           }
         }
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Default: plan + render mode (two-step process)
-    const panelPlanSchema = {
+    const panelPlanSchema: Record<string, unknown> = {
       type: "object",
       properties: {
         panels: {
@@ -118,7 +121,7 @@ export async function POST(req: NextRequest) {
       },
       required: ["panels", "globalStylePrompt", "characterGuidance"],
       additionalProperties: false,
-    } as const;
+    };
 
     const styleInstructions: Record<z.infer<typeof StyleEnum>, string> = {
       photorealism:
@@ -153,16 +156,21 @@ Additional character guidance:\n${characterHints}`;
 
     const planResponse = await generateText({
       input: planningPrompt,
-      jsonSchema: panelPlanSchema as any,
+      jsonSchema: panelPlanSchema,
       temperature: 0.5,
       apiKeyOverride: apiKey,
     });
 
     const planText = planResponse.text();
-    let plan: any;
+    type Plan = {
+      panels: { prompt: string; caption: string; dialogues: { speaker: string; text: string }[] }[];
+      globalStylePrompt: string;
+      characterGuidance: string;
+    };
+    let plan: Plan;
     try {
-      plan = JSON.parse(planText);
-    } catch (e) {
+      plan = JSON.parse(planText) as Plan;
+    } catch {
       return new Response(JSON.stringify({ error: "Failed to parse plan", raw: planText }), { status: 500 });
     }
 
@@ -172,7 +180,8 @@ Additional character guidance:\n${characterHints}`;
       inlineData: { data: c.imageBase64, mimeType: c.mimeType || "image/png" },
     }));
 
-    for (let i = 0; i < Math.min(plan.panels.length, numPages); i++) {
+    const panelCount = Math.min(plan.panels.length, numPages);
+    for (let i = 0; i < panelCount; i++) {
       const panel = plan.panels[i];
       const prompt = [
         plan.globalStylePrompt,
@@ -194,7 +203,7 @@ Additional character guidance:\n${characterHints}`;
     }
 
     const result = {
-      panels: plan.panels.slice(0, numPages).map((p: any, idx: number) => ({
+      panels: plan.panels.slice(0, panelCount).map((p, idx: number) => ({
         index: idx,
         caption: includeBelowText ? p.caption : "",
         dialogues: includeBelowText ? p.dialogues : [],
@@ -209,8 +218,9 @@ Additional character guidance:\n${characterHints}`;
     };
 
     return new Response(JSON.stringify(result), { status: 200, headers: { "content-type": "application/json" } });
-  } catch (err: any) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     console.error(err);
-    return new Response(JSON.stringify({ error: err?.message || "Unknown error" }), { status: 500 });
+    return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 }
